@@ -68,6 +68,13 @@ def recolectar():
                 electricas, normales
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, registros)
+
+        # Crear índice para acelerar consultas en Power BI
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_estados_station_time 
+            ON estados (id, timestamp);
+        """)
+
         conn.commit()
         conn.close()
         print(f"{len(registros)} estaciones registradas a las {ahora}")
