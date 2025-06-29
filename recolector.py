@@ -1,4 +1,3 @@
-
 import requests
 import sqlite3
 import datetime
@@ -22,30 +21,8 @@ def recolectar():
         response = requests.get(URL_STATUS)
         data = response.json()
         ahora = datetime.datetime.now(timezone('Europe/Madrid')).strftime("%Y-%m-%d %H:%M:%S")
-
-        conn = sqlite3.connect("biki_data.db")
-        cursor = conn.cursor()
-
-        # Crear tabla si no existe
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS estados (
-            id TEXT,
-            nombre TEXT,
-            timestamp TEXT,
-            num_bikes_available INTEGER,
-            num_docks_available INTEGER,
-            num_bikes_disabled INTEGER,
-            num_docks_disabled INTEGER,
-            electricas INTEGER,
-            normales INTEGER,
-            total_bicis INTEGER,
-            deltaBicis INTEGER,
-            deltaBicisE INTEGER,
-            deltaBicisN INTEGER
-        )
-        """)
-
         registros = []
+
         for est in data['data']['stations']:
             id_est = est['station_id']
             nombre = nombres_estaciones.get(id_est, id_est)
@@ -62,51 +39,37 @@ def recolectar():
                 elif tipo['vehicle_type_id'] == "FIT":
                     normales = tipo['count']
 
-            total_bicis = electricas + normales
-
-            # Obtener último valor previo
-            cursor.execute("""
-                SELECT total_bicis, electricas, normales FROM estados
-                WHERE id = ? ORDER BY timestamp DESC LIMIT 1
-            """, (id_est,))
-            row = cursor.fetchone()
-            if row:
-                anterior_total, anterior_elec, anterior_norm = row
-                delta = total_bicis - anterior_total
-                delta_elec = electricas - anterior_elec
-                delta_norm = normales - anterior_norm
-            else:
-                delta = None
-                delta_elec = None
-                delta_norm = None
-
             registros.append((
                 id_est, nombre, ahora, total, docks,
                 bikes_disabled, docks_disabled,
-                electricas, normales, total_bicis,
-                delta, delta_elec, delta_norm
+                electricas, normales
             ))
 
+        conn = sqlite3.connect("biki_data.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS estados (
+            id TEXT,
+            nombre TEXT,
+            timestamp TEXT,
+            num_bikes_available INTEGER,
+            num_docks_available INTEGER,
+            num_bikes_disabled INTEGER,
+            num_docks_disabled INTEGER,
+            electricas INTEGER,
+            normales INTEGER
+        )
+        """)
         cursor.executemany("""
             INSERT INTO estados (
                 id, nombre, timestamp,
                 num_bikes_available, num_docks_available,
                 num_bikes_disabled, num_docks_disabled,
-                electricas, normales, total_bicis,
-                deltaBicis, deltaBicisE, deltaBicisN
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                electricas, normales
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, registros)
-
-        # Crear índice si no existe
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_estados_station_time 
-            ON estados (id, timestamp)
-        """)
-
         conn.commit()
         conn.close()
         print(f"{len(registros)} estaciones registradas a las {ahora}")
     except Exception as e:
         print("Error recolectando:", e)
-
-recolectar()
