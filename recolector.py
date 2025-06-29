@@ -1,3 +1,4 @@
+
 import requests
 import sqlite3
 import datetime
@@ -38,7 +39,9 @@ def recolectar():
             electricas INTEGER,
             normales INTEGER,
             total_bicis INTEGER,
-            deltaBicis INTEGER
+            deltaBicis INTEGER,
+            deltaBicisE INTEGER,
+            deltaBicisN INTEGER
         )
         """)
 
@@ -63,17 +66,25 @@ def recolectar():
 
             # Obtener último valor previo
             cursor.execute("""
-                SELECT total_bicis FROM estados
+                SELECT total_bicis, electricas, normales FROM estados
                 WHERE id = ? ORDER BY timestamp DESC LIMIT 1
             """, (id_est,))
             row = cursor.fetchone()
-            anterior = row[0] if row else None
-            delta = total_bicis - anterior if anterior is not None else None
+            if row:
+                anterior_total, anterior_elec, anterior_norm = row
+                delta = total_bicis - anterior_total
+                delta_elec = electricas - anterior_elec
+                delta_norm = normales - anterior_norm
+            else:
+                delta = None
+                delta_elec = None
+                delta_norm = None
 
             registros.append((
                 id_est, nombre, ahora, total, docks,
                 bikes_disabled, docks_disabled,
-                electricas, normales, total_bicis, delta
+                electricas, normales, total_bicis,
+                delta, delta_elec, delta_norm
             ))
 
         cursor.executemany("""
@@ -81,11 +92,12 @@ def recolectar():
                 id, nombre, timestamp,
                 num_bikes_available, num_docks_available,
                 num_bikes_disabled, num_docks_disabled,
-                electricas, normales, total_bicis, deltaBicis
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                electricas, normales, total_bicis,
+                deltaBicis, deltaBicisE, deltaBicisN
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, registros)
 
-        # Crear índice si no existe (re-aplicable sin duplicación)
+        # Crear índice si no existe
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_estados_station_time 
             ON estados (id, timestamp)
@@ -98,4 +110,3 @@ def recolectar():
         print("Error recolectando:", e)
 
 recolectar()
-
